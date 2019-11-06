@@ -51,13 +51,13 @@ public class Serial implements SerialPortEventListener {
   // for the classloading problem.. because if code ran again,
   // the static class would have an object that could be closed
 
-  private SerialPort port;
+  protected SerialPort port;
 
-  private CharsetDecoder bytesToStrings;
-  private static final int IN_BUFFER_CAPACITY = 128;
-  private static final int OUT_BUFFER_CAPACITY = 128;
-  private ByteBuffer inFromSerial = ByteBuffer.allocate(IN_BUFFER_CAPACITY);
-  private CharBuffer outToMessage = CharBuffer.allocate(OUT_BUFFER_CAPACITY);
+  protected CharsetDecoder bytesToStrings;
+  protected static final int IN_BUFFER_CAPACITY = 128;
+  protected static final int OUT_BUFFER_CAPACITY = 128;
+  protected ByteBuffer inFromSerial = ByteBuffer.allocate(IN_BUFFER_CAPACITY);
+  protected CharBuffer outToMessage = CharBuffer.allocate(OUT_BUFFER_CAPACITY);
 
   public Serial() throws SerialException {
     this(PreferencesData.get("serial.port"),
@@ -282,7 +282,7 @@ public class Serial implements SerialPortEventListener {
    * General error reporting, all corraled here just in case
    * I think of something slightly more intelligent to do.
    */
-  private static void errorMessage(String where, Throwable e) {
+  protected static void errorMessage(String where, Throwable e) {
     System.err.println(format(tr("Error inside Serial.{0}()"), where));
     e.printStackTrace();
   }

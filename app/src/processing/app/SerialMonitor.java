@@ -24,6 +24,8 @@ import processing.app.legacy.PApplet;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 
+import org.isotel.IdmSerial;
+
 import static processing.app.I18n.tr;
 
 @SuppressWarnings("serial")
@@ -83,6 +85,16 @@ public class SerialMonitor extends AbstractTextMonitor {
       serial.write(s);
     }
   }
+  
+  private Serial getIDMSerial() throws SerialException {
+    
+    return new IdmSerial(getBoardPort().getAddress(), serialRate) {
+      @Override
+      protected void message(char buff[], int n) {
+        addToUpdateBuffer(buff, n);
+      }
+    };
+  }
 
   @Override
   public void open() throws Exception {
@@ -90,7 +102,8 @@ public class SerialMonitor extends AbstractTextMonitor {
 
     if (serial != null) return;
 
-    serial = new Serial(getBoardPort().getAddress(), serialRate) {
+    serial = PreferencesData.getBoolean("idm.udp.forward", false) ? getIDMSerial() :
+      new Serial(getBoardPort().getAddress(), serialRate) {
       @Override
       protected void message(char buff[], int n) {
         addToUpdateBuffer(buff, n);
