@@ -1,6 +1,6 @@
 package org.isotel;
 
-import org.isotel.IdmSerial.SNFramer;
+import org.isotel.IdmSerial.ISNCompactFrame;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -13,7 +13,6 @@ import java.nio.channels.DatagramChannel;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-
 /**
  * UDP communication manager
  *
@@ -21,19 +20,17 @@ import java.util.concurrent.ScheduledExecutorService;
  */
 public class IdmUDPHandler {
 
-
 	public static final String DEFAULT_HOST = "localhost";
 	public static final int DEFAULT_PORT = 33005;
 	private final ScheduledExecutorService executor;
 	private DatagramChannel client = null;
 	private SocketAddress address = null;
 	private boolean connected = false;
-	private SNFramer callback;
+	private ISNCompactFrame callback;
 
-	public IdmUDPHandler(SNFramer callback) {
+	public IdmUDPHandler(ISNCompactFrame callback) {
 		this.callback = callback;
 		executor = Executors.newSingleThreadScheduledExecutor();
-
 	}
 
 	/**
@@ -42,17 +39,12 @@ public class IdmUDPHandler {
 	 * @return
 	 */
 	public int connect(String host, int port) {
-
 		try {
 			String hostname = host + ":" + port;
 			report("SN Protocol packet forwarding mode is enabled through UDP");
 			report("Connecting UDP client to " + hostname);
-
-
 			client = DatagramChannel.open();
-
 			address = new InetSocketAddress(host, port);
-
 			client.connect(address);
 			client.setOption(StandardSocketOptions.SO_REUSEADDR, true);
 			client.configureBlocking(false);
@@ -60,30 +52,20 @@ public class IdmUDPHandler {
 			report("Connected UDP client to " + hostname);
 
 			Runnable r = new UDPRunnable();
-
 			Thread t = new Thread(r);
 			t.start();
-
-
 			return 0;
 
 		} catch (SocketException e) {
 			report("UDP Socket exception: " + e.getMessage());
-
 		} catch (UnknownHostException e) {
 			report("UDP Unknow Host exception: " + e.getMessage());
-
 		} catch (IOException e1) {
 			report("UDP IO exception: " + e1.getMessage());
-
 		}
-
 		report("Unable to connect UDP to " + this.getID());
-
-
 		connected = false;
 		return -1;
-
 	}
 
 	/**
@@ -100,7 +82,6 @@ public class IdmUDPHandler {
 	public int disconnect() {
 		try {
 			executor.shutdown();
-
 			if (connected) {
 				client.close();
 				connected = false;
@@ -109,7 +90,6 @@ public class IdmUDPHandler {
 		} catch (Exception e) {
 			report("Exception while disconnecting UDP client: " + e.getMessage());
 		}
-
 		return -1;
 	}
 
@@ -131,21 +111,14 @@ public class IdmUDPHandler {
 	 * @param length
 	 */
 	protected void write(final byte[] data, final int length) {
-
-
 		if (connected) {
 			try {
-
 				ByteBuffer buffer = ByteBuffer.wrap(data);
-
 				client.send(buffer, address);
-
-			} catch (IOException e) {
-				
+			} catch (IOException e) {				
 				report("IO exception: " + e.getMessage());
 			}
 		}
-
 	}
 
 	private static void report(String message) {
@@ -155,23 +128,18 @@ public class IdmUDPHandler {
 	private class UDPRunnable implements Runnable {
 		@Override
 		public void run() {
-
 			while (connected) {
 				try {
 					byte[] buf = new byte[512];
-
 					ByteBuffer buffer = ByteBuffer.wrap(buf);
-
 					SocketAddress addr = client.receive(buffer);
+					
 					if (addr != null) {
-
 						buffer.flip();
 						int limits = buffer.limit();
-
 						byte bytes[] = new byte[limits];
 						buffer.get(bytes, 0, limits);
 						callback.onDataReceived(bytes);
-
 					}
 					Thread.sleep(20);
 				} catch (java.net.SocketTimeoutException e) {
@@ -179,12 +147,10 @@ public class IdmUDPHandler {
 				} catch (SocketException se) {
 					disconnect();
 					report("UDP Socket exception: " + se.getMessage());
-
 					break;
 				} catch (Exception oe) {
 					disconnect();
 					report("UDP connection exception: " + oe.getMessage());
-
 					break;
 				}
 			}
