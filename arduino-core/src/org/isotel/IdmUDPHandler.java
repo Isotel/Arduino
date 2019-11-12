@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * UDP communication manager
@@ -25,12 +26,18 @@ public class IdmUDPHandler {
 	private final ScheduledExecutorService executor;
 	private DatagramChannel client = null;
 	private SocketAddress address = null;
+	private String host = null;
+	private int port = 0;
 	private boolean connected = false;
+	private boolean connecting = false;
 	private ISNCompactFrame callback;
+	private long lastConnected = 0;
+	private int reconnectInterval = 2;
 
 	public IdmUDPHandler(ISNCompactFrame callback) {
 		this.callback = callback;
 		executor = Executors.newSingleThreadScheduledExecutor();
+		report("SN Protocol packet forwarding mode is enabled through UDP");
 	}
 
 	/**
@@ -40,8 +47,11 @@ public class IdmUDPHandler {
 	 */
 	public int connect(String host, int port) {
 		try {
+			connecting = true;
+			this.host = host;
+			this.port = port;
 			String hostname = host + ":" + port;
-			report("SN Protocol packet forwarding mode is enabled through UDP");
+			
 			report("Connecting UDP client to " + hostname);
 			client = DatagramChannel.open();
 			address = new InetSocketAddress(host, port);
@@ -49,6 +59,9 @@ public class IdmUDPHandler {
 			client.setOption(StandardSocketOptions.SO_REUSEADDR, true);
 			client.configureBlocking(false);
 			connected = true;
+			lastConnected = System.currentTimeMillis();
+			connecting = false;
+			
 			report("Connected UDP client to " + hostname);
 
 			Runnable r = new UDPRunnable();
@@ -65,6 +78,8 @@ public class IdmUDPHandler {
 		}
 		report("Unable to connect UDP to " + this.getID());
 		connected = false;
+		connecting = false;
+		scheduleReconnectAttempt();
 		return -1;
 	}
 
@@ -89,6 +104,38 @@ public class IdmUDPHandler {
 			}
 		} catch (Exception e) {
 			report("Exception while disconnecting UDP client: " + e.getMessage());
+		}
+		return -1;
+	}
+	
+	private int disconnectOnError() {
+		try {			
+			if (connected) {
+				client.close();
+				connected = false;
+				
+			}
+		} catch (Exception e) {
+			report("Exception while disconnecting UDP client: " + e.getMessage());
+		}
+		if (System.currentTimeMillis() - this.lastConnected > 1800)
+			reconnectInterval = 2;
+		scheduleReconnectAttempt();
+		return 0;
+	}
+
+	private void scheduleReconnectAttempt() {
+		if (!executor.isShutdown() && !executor.isTerminated()) {
+			report(String.format("UDP reconnect attempt scheduled after %d seconds", reconnectInterval));
+			executor.schedule(this::reconnect, reconnectInterval, TimeUnit.SECONDS);
+			if (reconnectInterval < 64)
+				reconnectInterval *=2;
+		}
+	}
+	
+	private int reconnect() {
+		if (!connected && !connecting) {
+			connect(host,port);
 		}
 		return -1;
 	}
@@ -141,16 +188,18 @@ public class IdmUDPHandler {
 						buffer.get(bytes, 0, limits);
 						callback.onDataReceived(bytes);
 					}
-					Thread.sleep(20);
+					Thread.sleep(10);
 				} catch (java.net.SocketTimeoutException e) {
 					continue;
 				} catch (SocketException se) {
-					disconnect();
+					
 					report("UDP Socket exception: " + se.getMessage());
+					disconnectOnError();
 					break;
 				} catch (Exception oe) {
-					disconnect();
+					
 					report("UDP connection exception: " + oe.getMessage());
+					disconnectOnError();
 					break;
 				}
 			}
